@@ -3,5 +3,8 @@
   "output_folder": "C:\\Users\\460391\\Documents\\Filled Forms",
   "date_format": "%d/%m/%Y",
   "default_font": "Helvetica",
-  "default_font_size": 10
+  "default_font_size": 10,
+  "rm_name": "CHONG CHIN KIAN",
+  "rm_branch": "Petaling Jaya",
+  "rm_staff_id": ""
 }
