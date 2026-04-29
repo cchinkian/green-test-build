@@ -1,1 +1,48 @@
-{}
+{
+  "_TEMPLATE": {
+    "_comment": "Copy this block, rename the key, fill in real coordinates via CoordPicker",
+    "name": "My Form Name",
+    "template_subfolder": "subfolder_name_inside_forms_folder",
+    "fields": [
+      {
+        "_comment": "DATA — from Excel (Master or batch sheet). Changes every client/transaction.",
+        "name": "client_name", "page": 1, "x": 0, "y": 0,
+        "source": "data"
+      },
+      {
+        "_comment": "SETTINGS — from settings.json. Set once, reused on every form.",
+        "name": "rm_name", "page": 1, "x": 0, "y": 0,
+        "source": "settings"
+      },
+      {
+        "_comment": "FIXED — hardcoded here. Never changes (currency, bank name, etc.).",
+        "name": "currency", "page": 1, "x": 0, "y": 0,
+        "source": "fixed", "value": "MYR"
+      },
+      {
+        "_comment": "AUTO — app generates at runtime. auto_type: date | year | month",
+        "name": "date", "page": 1, "x": 0, "y": 0,
+        "source": "auto", "auto_type": "date"
+      }
+    ]
+  },
+
+  "_FIELD_REFERENCE": {
+    "_comment": "All field options — copy only what you need",
+    "fields": [
+      {
+        "name":         "field_name",
+        "page":         1,
+        "x":            100.0,
+        "y":            680.0,
+        "source":       "data | settings | fixed | auto",
+        "font":         "Helvetica",
+        "font_size":    10,
+        "value":        "(fixed only) text to print",
+        "auto_type":    "(auto only) date | year | month",
+        "settings_key": "(settings only, optional) key in settings.json if different from name",
+        "data_key":     "(data only, optional) Excel column name if different from name"
+      }
+    ]
+  }
+}
