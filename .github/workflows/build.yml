@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build Windows EXEs
 
 on:
   push:
@@ -16,13 +16,22 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install pyinstaller reportlab
+        run: pip install pyinstaller reportlab pypdf openpyxl PyMuPDF
 
-      - name: Build EXE
+      - name: Build GreenTest.exe
         run: pyinstaller --onefile --windowed --name GreenTest green_test.py
 
-      - name: Upload EXE artifact
+      - name: Build FormFiller.exe
+        run: pyinstaller --onefile --windowed --name FormFiller src/main_app.py
+
+      - name: Upload GreenTest
         uses: actions/upload-artifact@v4
         with:
           name: GreenTest-Windows
           path: dist/GreenTest.exe
+
+      - name: Upload FormFiller
+        uses: actions/upload-artifact@v4
+        with:
+          name: FormFiller-Windows
+          path: dist/FormFiller.exe
