@@ -1,1 +1,84 @@
-[]
+[
+  {
+    "id": "new_account_single",
+    "name": "New Account Opening (Single)",
+    "type": "single",
+    "forms": ["kyc_single", "account_opening"],
+    "manual_fields": []
+  },
+  {
+    "id": "ut_subscription_single",
+    "name": "UT Subscription (Single)",
+    "type": "single",
+    "forms": ["kyc_single", "ut_sub_form"],
+    "manual_fields": [
+      {"name": "fund_name",      "label": "Fund Name"},
+      {"name": "amount",         "label": "Investment Amount (RM)"},
+      {"name": "payment_method", "label": "Payment Method"},
+      {"name": "ut_account_no",  "label": "UT Account No"}
+    ]
+  },
+  {
+    "id": "ut_subscription_bulk",
+    "name": "UT Subscription (Bulk)",
+    "type": "bulk",
+    "data_sheet": "UT_Subscription",
+    "forms": ["kyc_single", "ut_sub_form"]
+  },
+  {
+    "id": "ut_redemption_single",
+    "name": "UT Redemption (Single)",
+    "type": "single",
+    "forms": ["ut_redemption_form"],
+    "manual_fields": [
+      {"name": "fund_name",       "label": "Fund Name"},
+      {"name": "units",           "label": "Units to Redeem"},
+      {"name": "bank_name",       "label": "Bank Name"},
+      {"name": "bank_account_no", "label": "Bank Account No"}
+    ]
+  },
+  {
+    "id": "ut_redemption_bulk",
+    "name": "UT Redemption (Bulk)",
+    "type": "bulk",
+    "data_sheet": "UT_Redemption",
+    "forms": ["ut_redemption_form"]
+  },
+  {
+    "id": "ut_switch_single",
+    "name": "UT Switching (Single)",
+    "type": "single",
+    "forms": ["ut_switch_form"],
+    "manual_fields": [
+      {"name": "switch_out_fund", "label": "Switch Out Fund"},
+      {"name": "switch_in_fund",  "label": "Switch In Fund"},
+      {"name": "units",           "label": "Units"},
+      {"name": "ut_account_no",   "label": "UT Account No"}
+    ]
+  },
+  {
+    "id": "ut_switch_bulk",
+    "name": "UT Switching (Bulk)",
+    "type": "bulk",
+    "data_sheet": "UT_Switch",
+    "forms": ["ut_switch_form"]
+  },
+  {
+    "id": "fd_renewal_bulk",
+    "name": "FD Renewal (Bulk)",
+    "type": "bulk",
+    "data_sheet": "FD_Renewal",
+    "forms": ["fd_renewal_form"]
+  },
+  {
+    "id": "fd_new_single",
+    "name": "FD New Placement (Single)",
+    "type": "single",
+    "forms": ["fd_placement_form"],
+    "manual_fields": [
+      {"name": "fd_amount",       "label": "Amount (RM)"},
+      {"name": "renewal_period",  "label": "Tenor (e.g. 12 months)"},
+      {"name": "interest_rate",   "label": "Interest Rate (%)"}
+    ]
+  }
+]
