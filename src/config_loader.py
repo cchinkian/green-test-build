@@ -68,13 +68,36 @@ def _md5(path: Path) -> str:
     return h.hexdigest()
 
 
+def scan_forms_folder(settings: dict) -> list[str]:
+    """
+    Auto-detect: list all subdirectory names inside forms_folder.
+    Returns sorted list of folder names (not full paths).
+    Returns [] if forms_folder doesn't exist.
+    """
+    forms_folder = Path(settings.get("forms_folder", ""))
+    if not forms_folder.exists():
+        return []
+    return sorted(p.name for p in forms_folder.iterdir() if p.is_dir())
+
+
 def find_template(settings: dict, template_subfolder: str,
-                  form_config: dict | None = None) -> Path:
+                  form_config: dict | None = None,
+                  test_mode: bool = False) -> Path:
     """
     Find the single PDF at the top level of a form subfolder.
-    Raises if zero or >1 PDF found (compliance guard).
-    P3-10: warns if PDF hash differs from stored template_hash.
-    Returns (path, hash_changed: bool) but callers can ignore the bool.
+
+    Surrender logic (filename-based):
+      - forms.json stores template_filename = last known PDF name
+      - If current PDF has a DIFFERENT name → form is surrendered
+      - Surrendered forms: raises TemplateSurrenderedError unless test_mode=True
+      - test_mode=True → returns the new PDF path with a _TEST_ fill warning
+
+    Compliance guard:
+      - Zero PDFs → FileNotFoundError
+      - >1 PDF → ValueError (must keep exactly one at top level)
+
+    Hash check (content-based, secondary):
+      - If filename matches but hash differs → TemplateChangedWarning
     """
     forms_folder = Path(settings["forms_folder"])
     subfolder    = forms_folder / template_subfolder
@@ -84,8 +107,7 @@ def find_template(settings: dict, template_subfolder: str,
     if not pdfs:
         raise FileNotFoundError(
             f"No PDF found in:\n  {subfolder}\n"
-            f"Create the folder C:\\Forms\\{template_subfolder}\\ "
-            "and place the blank form PDF there."
+            f"Place the blank form PDF in C:\\Forms\\{template_subfolder}\\"
         )
     if len(pdfs) > 1:
         names = ", ".join(p.name for p in sorted(pdfs))
@@ -97,17 +119,38 @@ def find_template(settings: dict, template_subfolder: str,
 
     pdf_path = pdfs[0]
 
-    # P3-10: hash check
     if form_config:
+        stored_name = form_config.get("template_filename", "")
         stored_hash = form_config.get("template_hash", "")
+        form_label  = form_config.get("name", template_subfolder)
+
+        # Filename changed → surrender (primary check)
+        if stored_name and pdf_path.name != stored_name:
+            if not test_mode:
+                raise TemplateSurrenderedError(
+                    f"Form PDF was replaced — old coordinates are surrendered.\n\n"
+                    f"Form:     {form_label}\n"
+                    f"Was:      {stored_name}\n"
+                    f"Now:      {pdf_path.name}\n\n"
+                    "Re-map this form in CoordPicker to restore normal fills.\n"
+                    "Or click 'Test Fill' to preview with old coordinates "
+                    "(output will be marked _TEST_).",
+                    pdf_path, stored_name
+                )
+            # test_mode: return path anyway (caller adds _TEST_ prefix)
+            return pdf_path
+
+        # Hash check — runs when:
+        #   (a) stored_name matches current filename (same file, check content), OR
+        #   (b) no stored_name (old format without filename tracking, check hash only)
         if stored_hash:
             current_hash = _md5(pdf_path)
             if current_hash != stored_hash:
                 raise TemplateChangedWarning(
-                    f"The PDF for this form has changed since coordinates were mapped.\n"
-                    f"Form: {form_config.get('name', template_subfolder)}\n"
+                    f"PDF content changed since last mapping.\n"
+                    f"Form: {form_label}\n"
                     f"File: {pdf_path.name}\n\n"
-                    "Re-run CoordPicker for this form to update the field positions.",
+                    "Re-map in CoordPicker to update field positions.",
                     pdf_path
                 )
 
@@ -119,19 +162,27 @@ def compute_template_hash(pdf_path: Path) -> str:
 
 
 class TemplateChangedWarning(Exception):
-    """Raised when the PDF template has changed since coordinates were mapped."""
+    """Same filename, different content — coordinates may be off."""
     def __init__(self, message: str, pdf_path: Path):
         super().__init__(message)
         self.pdf_path = pdf_path
+
+
+class TemplateSurrenderedError(Exception):
+    """PDF filename changed — coordinates are surrendered. Test-only until re-mapped."""
+    def __init__(self, message: str, pdf_path: Path, old_filename: str):
+        super().__init__(message)
+        self.pdf_path    = pdf_path
+        self.old_filename = old_filename
 
 
 # ── Health check ──────────────────────────────────────────────────────────────
 
 def health_check(settings: dict, forms: dict) -> list[dict]:
     """
-    P1-3: Verify forms_folder exists and each mapped form subfolder is present.
-    Returns list of {name, status, message} dicts.
-    Skips _TEMPLATE and _FIELD_REFERENCE entries.
+    Verify forms_folder + each mapped form subfolder.
+    Statuses: ok | warn | error | surrendered
+    Also reports discovered subfolders not yet in forms.json (unmapped).
     """
     results = []
     forms_folder = Path(settings.get("forms_folder", ""))
@@ -140,28 +191,51 @@ def health_check(settings: dict, forms: dict) -> list[dict]:
         return [{"name": "forms_folder", "status": "error",
                  "message": f"Folder not found: {forms_folder}"}]
 
+    # Check each registered form
+    registered_subfolders = set()
     for form_id, form_cfg in forms.items():
         if form_id.startswith("_"):
             continue
         subfolder = form_cfg.get("template_subfolder", "")
         if not subfolder:
             continue
+        registered_subfolders.add(subfolder)
         path = forms_folder / subfolder
+
         if not path.exists():
             results.append({"name": form_id, "status": "error",
-                            "message": f"Missing: {path}"})
+                            "message": f"Subfolder missing: {subfolder}"})
+            continue
+
+        pdfs = [p for p in path.iterdir()
+                if p.is_file() and p.suffix.lower() == ".pdf"]
+
+        if not pdfs:
+            results.append({"name": form_id, "status": "warn",
+                            "message": f"No PDF in {subfolder}\\"})
+        elif len(pdfs) > 1:
+            names = ", ".join(p.name for p in sorted(pdfs))
+            results.append({"name": form_id, "status": "warn",
+                            "message": f"Multiple PDFs: {names}"})
         else:
-            pdfs = [p for p in path.iterdir()
-                    if p.is_file() and p.suffix.lower() == ".pdf"]
-            if not pdfs:
-                results.append({"name": form_id, "status": "warn",
-                                "message": f"No PDF in: {path}"})
-            elif len(pdfs) > 1:
-                results.append({"name": form_id, "status": "warn",
-                                "message": f"Multiple PDFs in: {path}"})
+            current_name   = pdfs[0].name
+            stored_name    = form_cfg.get("template_filename", "")
+            if stored_name and current_name != stored_name:
+                results.append({
+                    "name": form_id, "status": "surrendered",
+                    "message": (f"PDF replaced: {stored_name} → {current_name}. "
+                                "Re-map in CoordPicker. Test fills allowed.")
+                })
             else:
                 results.append({"name": form_id, "status": "ok",
-                                "message": str(pdfs[0].name)})
+                                "message": current_name})
+
+    # Report unregistered subfolders (discovered but not in forms.json)
+    for sub in scan_forms_folder(settings):
+        if sub not in registered_subfolders:
+            results.append({"name": f"[{sub}]", "status": "unmapped",
+                            "message": f"Found in C:\\Forms but not in forms.json"})
+
     return results
 
 

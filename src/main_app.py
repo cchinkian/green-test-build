@@ -23,6 +23,7 @@ import config_loader
 import excel_reader
 import pdf_engine
 from excel_reader import ExcelLockedError
+from config_loader import TemplateChangedWarning, TemplateSurrenderedError
 
 _MASTER_COLS = {
     "name", "ic_number", "phone", "email",
@@ -159,9 +160,11 @@ class FormFillerApp(tk.Tk):
     def _run_health_check(self):
         """P1-3: Show warning banner if any form subfolders are missing."""
         results = config_loader.health_check(self.settings, self.forms)
-        errors  = [r for r in results if r["status"] == "error"]
-        warns   = [r for r in results if r["status"] == "warn"]
-        ok      = [r for r in results if r["status"] == "ok"]
+        errors      = [r for r in results if r["status"] == "error"]
+        warns       = [r for r in results if r["status"] == "warn"]
+        surrendered = [r for r in results if r["status"] == "surrendered"]
+        unmapped    = [r for r in results if r["status"] == "unmapped"]
+        ok          = [r for r in results if r["status"] == "ok"]
 
         if not results:
             self.frm_health.pack_forget()
@@ -169,12 +172,18 @@ class FormFillerApp(tk.Tk):
 
         parts = []
         if ok:
-            parts.append(f"✓ {len(ok)} form(s) ready")
+            parts.append(f"✓ {len(ok)} ready")
+        if surrendered:
+            names = ", ".join(r["name"] for r in surrendered)
+            parts.append(f"🔒 {len(surrendered)} surrendered (test-only): {names}")
+        if unmapped:
+            names = ", ".join(r["name"] for r in unmapped)
+            parts.append(f"📂 {len(unmapped)} unregistered folder(s): {names}")
         if warns:
             parts.append(f"⚠ {len(warns)} warning(s)")
         if errors:
             names = ", ".join(r["name"] for r in errors)
-            parts.append(f"✗ {len(errors)} missing subfolder(s): {names}")
+            parts.append(f"✗ {len(errors)} missing: {names}")
 
         msg = "  |  ".join(parts)
         if errors or warns:
@@ -420,7 +429,6 @@ class FormFillerApp(tk.Tk):
                 f"Filling {i}/{n}: {client.get('name', '?')}...", "blue")
             self.update_idletasks()
             try:
-                from config_loader import TemplateChangedWarning
                 results, warnings = pdf_engine.fill_bundle(
                     application=app,
                     forms_config=self.forms,
@@ -432,13 +440,43 @@ class FormFillerApp(tk.Tk):
                 )
                 saved.extend(results)
                 all_warnings.extend(warnings)
-            except TemplateChangedWarning as e:
+            except TemplateSurrenderedError as e:
+                # PDF filename changed — offer test fill only
                 if messagebox.askyesno(
-                    "Form template changed",
-                    f"{e}\n\nFill anyway with possibly wrong coordinates?",
+                    "Form Surrendered — Test Fill?",
+                    f"{e}\n\nRun TEST FILL with old coordinates?\n"
+                    "(Output will be prefixed _TEST_ — do not submit)",
                     icon="warning"
                 ):
-                    # retry without hash check
+                    def _test_finder(settings, subfolder, form_cfg=None):
+                        return config_loader.find_template(
+                            settings, subfolder, form_cfg, test_mode=True)
+                    try:
+                        results, warnings = pdf_engine.fill_bundle(
+                            application=app,
+                            forms_config=self.forms,
+                            client=client,
+                            output_folder=output_folder,
+                            settings=self.settings,
+                            find_template_fn=_test_finder,
+                            log_path=log,
+                            test_mode=True,
+                        )
+                        saved.extend(results)
+                        all_warnings.extend(warnings)
+                    except Exception as e2:
+                        errors.append(f"{client.get('name', '?')}: {e2}")
+                else:
+                    errors.append(
+                        f"{client.get('name', '?')}: skipped — form surrendered. "
+                        "Re-map in CoordPicker.")
+
+            except TemplateChangedWarning as e:
+                if messagebox.askyesno(
+                    "Form content changed",
+                    f"{e}\n\nFill anyway with current coordinates?",
+                    icon="warning"
+                ):
                     def _no_hash(settings, subfolder, form_cfg=None):
                         return config_loader.find_template(
                             settings, subfolder, None)
@@ -457,7 +495,7 @@ class FormFillerApp(tk.Tk):
                     except Exception as e2:
                         errors.append(f"{client.get('name', '?')}: {e2}")
                 else:
-                    errors.append(f"{client.get('name', '?')}: skipped (template changed)")
+                    errors.append(f"{client.get('name', '?')}: skipped (content changed)")
             except Exception as e:
                 errors.append(f"{client.get('name', '?')}: {e}")
 
@@ -475,6 +513,7 @@ class FormFillerApp(tk.Tk):
             messagebox.showerror("Errors", "\n".join(errors))
 
         parts = [f"Saved {len(saved)} PDF(s)."]
+        test_count = sum(1 for p in saved if p.name.startswith("_TEST_"))
         if errors:
             parts.append(f"{len(errors)} error(s).")
         if all_warnings:

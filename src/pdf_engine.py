@@ -230,7 +230,8 @@ def fill_form(template_path: Path, form_config: dict,
 def fill_bundle(application: dict, forms_config: dict,
                 client: dict, output_folder: Path,
                 settings: dict, find_template_fn,
-                log_path: Path | None = None) -> tuple[list[Path], list[str]]:
+                log_path: Path | None = None,
+                test_mode: bool = False) -> tuple[list[Path], list[str]]:
     """
     Fill all forms in a bundle for one client.
     Returns (output_paths, warning_messages).
@@ -256,7 +257,8 @@ def fill_bundle(application: dict, forms_config: dict,
             )
         template_path = find_template_fn(settings, form_cfg["template_subfolder"],
                                          form_cfg)
-        base_name     = f"{name_safe}_{form_id}_{today_safe}.pdf"
+        prefix        = "_TEST_" if test_mode else ""
+        base_name     = f"{prefix}{name_safe}_{form_id}_{today_safe}.pdf"
         output_path   = output_folder / base_name
 
         blanks, final_path = fill_form(

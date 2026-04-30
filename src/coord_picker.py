@@ -93,7 +93,20 @@ class CoordPickerApp(tk.Tk):
         section(left, "1. Form identity")
         lbl_entry(left, "Form ID (no spaces):", self._form_id)
         lbl_entry(left, "Display name:", self._form_name_var)
-        lbl_entry(left, "Template subfolder:", self._subfolder)
+
+        tk.Label(left, text="Template subfolder:", bg="#f0f0f0",
+                 anchor="w").pack(fill=tk.X)
+        sub_row = tk.Frame(left, bg="#f0f0f0")
+        sub_row.pack(fill=tk.X, pady=(0, 3))
+        self._cmb_subfolder = ttk.Combobox(sub_row, textvariable=self._subfolder,
+                                            state="normal", width=22)
+        self._cmb_subfolder.pack(side=tk.LEFT)
+        self._cmb_subfolder.bind("<<ComboboxSelected>>",
+                                  self._on_subfolder_selected)
+        tk.Button(sub_row, text="↻", width=3,
+                  command=self._refresh_subfolders).pack(side=tk.LEFT, padx=2)
+        self._refresh_subfolders()
+
         tk.Button(left, text="Open PDF…",
                   command=self._open_pdf).pack(fill=tk.X, pady=(2, 4))
 
@@ -204,6 +217,45 @@ class CoordPickerApp(tk.Tk):
         self.lbl_status = tk.Label(self, text="  Open a PDF to start.",
                                    anchor="w", fg="gray")
         self.lbl_status.pack(fill=tk.X, padx=8, pady=(0, 4))
+
+    # ── Subfolder auto-discovery ──────────────────────────────────────────────
+
+    def _refresh_subfolders(self):
+        """Scan C:\\Forms (from settings) and populate subfolder dropdown."""
+        try:
+            settings = config_loader.load_settings()
+            folders  = config_loader.scan_forms_folder(settings)
+            self._cmb_subfolder["values"] = folders
+            if folders and not self._subfolder.get():
+                self._subfolder.set(folders[0])
+        except Exception:
+            pass  # settings.json may not exist yet
+
+    def _on_subfolder_selected(self, _=None):
+        """When RM picks a subfolder, auto-set form_id and try to load existing config."""
+        sub = self._subfolder.get()
+        if not sub:
+            return
+        if not self._form_id.get():
+            self._form_id.set(sub.lower().replace(" ", "_").replace("-", "_"))
+        # Load existing form fields if already mapped
+        try:
+            forms = config_loader.load_forms()
+            for fid, fcfg in forms.items():
+                if fid.startswith("_"):
+                    continue
+                if fcfg.get("template_subfolder") == sub:
+                    self._form_id.set(fid)
+                    self._form_name_var.set(fcfg.get("name", ""))
+                    self._fields = list(fcfg.get("fields", []))
+                    self._refresh_list()
+                    self._status(
+                        f"Loaded existing mapping for '{fid}' "
+                        f"({len(self._fields)} fields). "
+                        "Open PDF to re-map or add fields.")
+                    break
+        except Exception:
+            pass
 
     # ── PDF ───────────────────────────────────────────────────────────────────
 
@@ -362,9 +414,20 @@ class CoordPickerApp(tk.Tk):
         # Strip template/reference entries
         clean = {k: v for k, v in existing.items()
                  if not k.startswith("_")}
+        pdf_filename = ""
+        pdf_hash     = ""
+        if self._doc and hasattr(self, "_pdf_path") and self._pdf_path:
+            pdf_filename = self._pdf_path.name
+            try:
+                pdf_hash = config_loader.compute_template_hash(self._pdf_path)
+            except Exception:
+                pass
+
         clean[fid] = {
             "name":               self._form_name_var.get().strip() or fid,
             "template_subfolder": self._subfolder.get().strip(),
+            "template_filename":  pdf_filename,
+            "template_hash":      pdf_hash,
             "fields":             self._fields,
         }
         config_loader.save_forms(clean)
