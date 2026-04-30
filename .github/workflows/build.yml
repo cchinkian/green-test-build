@@ -24,14 +24,28 @@ jobs:
       - name: Build FormFiller.exe
         run: pyinstaller --onefile --windowed --name FormFiller src/main_app.py
 
-      - name: Upload GreenTest
+      - name: Stage portable package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "FormFiller-portable"
+          Copy-Item "dist\FormFiller.exe"  "FormFiller-portable\"
+          Copy-Item "dist\GreenTest.exe"   "FormFiller-portable\"
+          Copy-Item -Recurse "config"      "FormFiller-portable\"
+          New-Item -ItemType Directory -Path "FormFiller-portable\data"
+          Copy-Item "data\clients_template.xlsx" "FormFiller-portable\data\"
+          # Rename settings.example.json → settings.json as the starter config
+          Copy-Item "config\settings.example.json" "FormFiller-portable\config\settings.json"
+          # Remove _comment keys from shipped forms.json (keep clean)
+          Write-Host "Package staged."
+
+      - name: Upload GreenTest (standalone)
         uses: actions/upload-artifact@v4
         with:
           name: GreenTest-Windows
           path: dist/GreenTest.exe
 
-      - name: Upload FormFiller
+      - name: Upload FormFiller portable package
         uses: actions/upload-artifact@v4
         with:
-          name: FormFiller-Windows
-          path: dist/FormFiller.exe
+          name: FormFiller-portable
+          path: FormFiller-portable/

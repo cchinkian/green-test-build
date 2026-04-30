@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+dist/
+build/
+*.spec
+venv/
+zzz_*
+
+# PDPA — never commit real client data or RM personal settings
+data/clients.xlsx
+data/fill_log.csv
+config/settings.json
+
+# Template files are committed (safe — no real data)
+!data/clients_template.xlsx
+!config/settings.example.json

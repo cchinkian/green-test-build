@@ -1,0 +1,18 @@
+{
+  "_instructions": [
+    "Copy this file to settings.json and fill in your details.",
+    "settings.json is gitignored — it stays on your pen drive only.",
+    "forms_folder: path to your SOP forms folder on the target Windows PC.",
+    "output_folder: where filled PDFs will be saved.",
+    "Y coordinates in forms.json are measured from the BOTTOM of the page.",
+    "A4 bottom = y:0, A4 top = y:841. Use CoordPicker to find coordinates."
+  ],
+  "forms_folder": "C:\\Users\\YOUR_USERNAME\\Documents\\SOP Folder\\forms",
+  "output_folder": "C:\\Users\\YOUR_USERNAME\\Documents\\Filled Forms",
+  "date_format": "%d/%m/%Y",
+  "default_font": "Helvetica",
+  "default_font_size": 10,
+  "rm_name": "YOUR FULL NAME",
+  "rm_branch": "YOUR BRANCH",
+  "rm_staff_id": "YOUR STAFF ID"
+}
