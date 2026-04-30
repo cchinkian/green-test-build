@@ -1,47 +1,45 @@
 {
-  "_TEMPLATE": {
-    "_comment": "Copy this block, rename the key, fill in real coordinates via CoordPicker",
-    "name": "My Form Name",
-    "template_subfolder": "subfolder_name_inside_forms_folder",
-    "fields": [
-      {
-        "_comment": "DATA — from Excel (Master or batch sheet). Changes every client/transaction.",
-        "name": "client_name", "page": 1, "x": 0, "y": 0,
-        "source": "data"
-      },
-      {
-        "_comment": "SETTINGS — from settings.json. Set once, reused on every form.",
-        "name": "rm_name", "page": 1, "x": 0, "y": 0,
-        "source": "settings"
-      },
-      {
-        "_comment": "FIXED — hardcoded here. Never changes (currency, bank name, etc.).",
-        "name": "currency", "page": 1, "x": 0, "y": 0,
-        "source": "fixed", "value": "MYR"
-      },
-      {
-        "_comment": "AUTO — app generates at runtime. auto_type: date | year | month",
-        "name": "date", "page": 1, "x": 0, "y": 0,
-        "source": "auto", "auto_type": "date"
-      }
-    ]
+  "_shared_fields": {
+    "client_name":  {"name": "client_name",  "source": "data",     "font_size": 10},
+    "ic_number":    {"name": "ic_number",    "source": "data",     "font_size": 10, "format": "ic_dashed"},
+    "phone":        {"name": "phone",        "source": "data",     "font_size": 10},
+    "email":        {"name": "email",        "source": "data",     "font_size": 10},
+    "address_line1":{"name": "address_line1","source": "data",     "font_size": 10},
+    "address_line2":{"name": "address_line2","source": "data",     "font_size": 10},
+    "city":         {"name": "city",         "source": "data",     "font_size": 10},
+    "state":        {"name": "state",        "source": "data",     "font_size": 10},
+    "postcode":     {"name": "postcode",     "source": "data",     "font_size": 10},
+    "date":         {"name": "date",         "source": "auto",     "auto_type": "date", "font_size": 10},
+    "rm_name":      {"name": "rm_name",      "source": "settings", "font_size": 9},
+    "rm_branch":    {"name": "rm_branch",    "source": "settings", "font_size": 9},
+    "rm_staff_id":  {"name": "rm_staff_id",  "source": "settings", "font_size": 9},
+    "currency_myr": {"name": "currency_myr", "source": "fixed",    "value": "MYR", "font_size": 10}
   },
 
-  "_FIELD_REFERENCE": {
-    "_comment": "All field options — copy only what you need",
+  "_TEMPLATE": {
+    "_usage": [
+      "Copy this block, rename the key (e.g. 'kyc_single'), fill coordinates.",
+      "Use 'shared' to reference _shared_fields — only x, y, page needed.",
+      "Use 'name' + full field def for form-specific fields.",
+      "template_hash is set automatically by CoordPicker when you save."
+    ],
+    "name": "Form Display Name",
+    "template_subfolder": "subfolder_inside_C_Forms",
+    "template_hash": "",
     "fields": [
+      {"shared": "client_name",  "page": 1, "x": 0, "y": 0},
+      {"shared": "ic_number",    "page": 1, "x": 0, "y": 0},
+      {"shared": "date",         "page": 1, "x": 0, "y": 0},
+      {"shared": "rm_name",      "page": 1, "x": 0, "y": 0},
       {
-        "name":         "field_name",
-        "page":         1,
-        "x":            100.0,
-        "y":            680.0,
-        "source":       "data | settings | fixed | auto",
-        "font":         "Helvetica",
-        "font_size":    10,
-        "value":        "(fixed only) text to print",
-        "auto_type":    "(auto only) date | year | month",
-        "settings_key": "(settings only, optional) key in settings.json if different from name",
-        "data_key":     "(data only, optional) Excel column name if different from name"
+        "_comment": "Form-specific field (not shared):",
+        "name": "fd_amount", "page": 1, "x": 0, "y": 0,
+        "source": "data", "format": "currency_myr", "required": true
+      },
+      {
+        "_comment": "Fixed value (never changes):",
+        "name": "currency", "page": 1, "x": 0, "y": 0,
+        "source": "fixed", "value": "MYR"
       }
     ]
   }

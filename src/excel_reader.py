@@ -1,31 +1,54 @@
 """
 Excel reader — multi-sheet, fully dynamic.
+Master sheet: client static info keyed by ic_number.
+Batch sheets: transaction-specific data joined to Master by ic_number.
 
-Fix 8: IC numbers normalized on both sides of the join (strip dashes/spaces,
-        zero-pad to 12) so "880101-14-5678" == "880101145678" always match.
-Fix 9: Native Python types (datetime, int, float) preserved through the reader
-        so formatters in pdf_engine receive typed values, not pre-cast strings.
+P1-1: All load_workbook() calls protected against PermissionError
+       (Excel holds exclusive lock on Windows when file is open).
+Fix-8: IC numbers normalized both sides of join.
+Fix-9: Native Python types preserved through reader.
 """
 import re
 import openpyxl
 from pathlib import Path
 
 
-# ── IC normalisation ─────────────────────────────────────────────────────────
+# ── IC normalization ──────────────────────────────────────────────────────────
 
 def normalize_ic(raw) -> str:
-    """Strip non-digits, zero-pad to 12. Empty input returns ''."""
+    """Strip non-digits, zero-pad to 12. Empty → ''.
+    Handles float from Excel (880101145678.0 → '880101145678').
+    """
+    # Convert float to int string first to avoid '880101145678.0'
+    if isinstance(raw, float):
+        raw = int(raw)
     cleaned = re.sub(r"[^0-9]", "", str(raw))
     return cleaned.zfill(12) if cleaned else ""
+
+
+# ── Safe workbook open ────────────────────────────────────────────────────────
+
+class ExcelLockedError(Exception):
+    """Raised when Excel holds an exclusive lock on the file."""
+
+
+def _open_wb(path: Path):
+    """Open workbook, converting Windows PermissionError to ExcelLockedError."""
+    try:
+        return openpyxl.load_workbook(path, read_only=True, data_only=True)
+    except PermissionError:
+        raise ExcelLockedError(
+            f"Cannot open '{path.name}' — it is locked by Excel.\n"
+            "Close the file in Excel, then click ↻ Reload."
+        )
 
 
 # ── Sheet parsing ─────────────────────────────────────────────────────────────
 
 def _sheet_to_dicts(ws) -> list[dict]:
     """
-    Parse a worksheet into a list of dicts.
-    Native types (datetime, int, float) are preserved — only None → "" and
-    bare strings are stripped. Formatters in pdf_engine handle the rest.
+    Parse a worksheet. Native types (datetime, int, float) preserved.
+    None cells → "". Strings stripped. ic_number auto-normalized.
     """
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
@@ -45,8 +68,7 @@ def _sheet_to_dicts(ws) -> list[dict]:
             elif isinstance(v, str):
                 record[k] = v.strip()
             else:
-                record[k] = v  # int, float, datetime preserved
-        # Normalize ic_number if present
+                record[k] = v  # int, float, datetime preserved for formatters
         if "ic_number" in record:
             record["ic_number"] = normalize_ic(record["ic_number"])
         result.append(record)
@@ -56,8 +78,8 @@ def _sheet_to_dicts(ws) -> list[dict]:
 # ── Public loaders ────────────────────────────────────────────────────────────
 
 def load_master(path: Path) -> dict[str, dict]:
-    """Returns {normalized_ic: client_dict} from the Master sheet."""
-    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    """Returns {normalized_ic: client_dict} from Master sheet."""
+    wb = _open_wb(path)
     clients = _sheet_to_dicts(wb["Master"])
     wb.close()
     return {c["ic_number"]: c for c in clients if c.get("ic_number")}
@@ -65,7 +87,7 @@ def load_master(path: Path) -> dict[str, dict]:
 
 def get_sheet_headers(path: Path, sheet_name: str) -> list[str]:
     """Column names from a batch sheet, excluding ic_number."""
-    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    wb = _open_wb(path)
     if sheet_name not in wb.sheetnames:
         wb.close()
         return []
@@ -81,16 +103,12 @@ def get_sheet_headers(path: Path, sheet_name: str) -> list[str]:
 
 def load_batch(path: Path, sheet_name: str,
                master: dict[str, dict]) -> list[dict]:
-    """
-    Merged records: Master static + batch transaction data.
-    Joined by normalized ic_number. Skips rows with no Master match.
-    """
-    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    """Master + batch data merged by ic_number. Missing Master rows skipped."""
+    wb = _open_wb(path)
     if sheet_name not in wb.sheetnames:
         wb.close()
         raise ValueError(
-            f"Sheet '{sheet_name}' not found. "
-            f"Available: {wb.sheetnames}"
+            f"Sheet '{sheet_name}' not found. Available: {wb.sheetnames}"
         )
     rows = _sheet_to_dicts(wb[sheet_name])
     wb.close()
@@ -105,9 +123,12 @@ def load_batch(path: Path, sheet_name: str,
 
 
 def find_client_in_batch(path: Path, sheet_name: str, ic_number: str) -> dict:
-    """Return batch row for one client (by normalized IC), or {} if not found."""
+    """Return batch row for one client (normalized IC), or {} if not found."""
     ic_norm = normalize_ic(ic_number)
-    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    try:
+        wb = _open_wb(path)
+    except ExcelLockedError:
+        return {}
     if sheet_name not in wb.sheetnames:
         wb.close()
         return {}
